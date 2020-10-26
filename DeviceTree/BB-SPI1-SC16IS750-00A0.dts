@@ -1,0 +1,118 @@
+/*
+ * Copyright (C) 2015 Robert Nelson <robertcnelson@gmail.com>
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ */
+
+/dts-v1/;
+/plugin/;
+
+#include <dt-bindings/board/am335x-bbw-bbb-base.h>
+#include <dt-bindings/pinctrl/am33xx.h>
+#include <dt-bindings/interrupt-controller/irq.h>
+
+/ {
+	compatible = "ti,beaglebone", "ti,beaglebone-black", "ti,beaglebone-green";
+
+	/* identification */
+	part-number = "BB-SPI1-SC16IS750";
+	version = "00A0";
+
+	/* state the resources this cape uses */
+	exclusive-use =
+		/* the pin header uses */
+		"P9.31",	/* spi1_sclk, SPI1_SCLK */
+		"P9.29",	/* spi1_d0, SPI1_MISO */
+		"P9.30",	/* spi1_d1, SPI1_MOSI */
+		"P9.28",	/* spi1_cs0, CS0 */
+		"P8.43",	/* irq P8_43 (R13) gpmc_a0.gpio2[8] */
+		
+		/* the hardware ip uses */
+		"spi1";
+	/*
+	 * Helper to show loaded overlays under: /proc/device-tree/chosen/overlays/
+	 */
+	fragment@0 {
+		target-path="/";
+		__overlay__ {
+
+			chosen {
+				overlays {
+					BB-SPI1-SC16IS750-00A0 = __TIMESTAMP__;
+				};
+			};
+		};
+	};
+	
+	/*
+	 * Free up the pins used by the cape from the pinmux helpers.
+	 */
+	fragment@1 {
+		target = <&ocp>;
+		__overlay__ {
+			P9_28_pinmux { status = "disabled"; };	/* spi1_cs0 */
+			P9_30_pinmux { status = "disabled"; };	/* spi1_d1 */
+			P9_29_pinmux { status = "disabled"; };	/* spi1_d0 */
+			P9_31_pinmux { status = "disabled"; };	/* spi1_sclk */
+			
+			P8_43_pinmux { status = "disabled"; };	/* irq P8_43 (R13) gpio2[8] */
+		};
+	};
+
+	fragment@2 {
+		target = <&am33xx_pinmux>;
+		__overlay__ {
+		
+		    bb_sc16is_pins: bb_sc16is_pins {
+				pinctrl-single,pins = <
+					AM33XX_PADCONF(AM335X_PIN_LCD_DATA2, PIN_INPUT_PULLDOWN, MUX_MODE7)    /* irq P8_43 lcd_data2.gpio2[8] */
+				>;
+			};
+		
+			bb_spi1_pins: pinmux_bb_spi1_pins {
+				pinctrl-single,pins = <
+				    AM33XX_PADCONF(AM335X_PIN_MCASP0_ACLKX, PIN_INPUT_PULLUP, MUX_MODE3) /* P9_31 spi1_sclk.spi1_sclk */
+					AM33XX_PADCONF(AM335X_PIN_MCASP0_FSX, PIN_INPUT_PULLUP, MUX_MODE3)   /* P9_29  spi1_d0.spi1_d0 */
+					AM33XX_PADCONF(AM335X_PIN_MCASP0_AXR0, PIN_OUTPUT_PULLUP, MUX_MODE3)   /* P9_30 spi1_d1.spi1_d1 */
+					AM33XX_PADCONF(AM335X_PIN_MCASP0_AHCLKR, PIN_OUTPUT_PULLUP, MUX_MODE3)  /* P9_28 spi1_cs0.spi1_cs0 */
+				>;
+			};
+		};
+	};
+
+	fragment@3 {
+		target = <&spi1>;
+		__overlay__ {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			status = "okay";
+			pinctrl-names = "default";
+			pinctrl-0 = <&bb_spi1_pins>;
+			ti,pio-mode; /* disable dma when used as an overlay, dma gets stuck at 160 bits... */
+
+            sc16is750: sc16is750@0 {
+                compatible = "nxp,sc16is750";
+                reg = <0>;
+                clocks = <&clk20m>;
+                pinctrl-names = "default";
+				pinctrl-0 = <&bb_sc16is_pins>;
+				
+				interrupt-parent = <&gpio2>;
+                interrupts = <8 2>; /* IRQ_TYPE_EDGE_FALLING */
+                spi-max-frequency = <4000000>;
+		        gpio-controller;
+		        #gpio-cells = <2>;
+
+                clk20m: clk20m {
+                    compatible = "fixed-clock";
+                    #clock-cells = <0>;
+                    clock-frequency = <14745600>;
+                };
+            };
+		};
+	};
+};
+
